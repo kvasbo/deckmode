@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+
+      # No cgo anywhere in the dependencies, so this is a static binary: no
+      # glibc to match, whatever the Pi OS release.
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          mkdir dist
+          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o dist/deckmode-linux-arm64 .
+          file dist/deckmode-linux-arm64 | grep "statically linked"
+
+      - name: Runs on Debian bookworm and trixie
+        run: |
+          for release in bookworm trixie; do
+            got=$(docker run --rm -v "$PWD/dist:/dist:ro" "debian:$release-slim" /dist/deckmode-linux-arm64 --version)
+            test "$got" = "$GITHUB_REF_NAME"
+          done
+
+      - name: Pack the Pi installer
+        run: |
+          mkdir deckmode-deploy
+          cp deploy/* config.example.yaml deckmode-deploy/
+          cp -r icons deckmode-deploy/
+          tar czf dist/deckmode-deploy.tar.gz deckmode-deploy
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum deckmode-linux-arm64 deckmode-deploy.tar.gz > checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag

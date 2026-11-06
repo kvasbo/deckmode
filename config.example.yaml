@@ -1,0 +1,44 @@
+# Copy this and change it. MQTT_USER and MQTT_PASS come from the environment.
+
+# tcp:// or mqtt:// plain, ssl://, tls:// or mqtts:// encrypted. The port is required.
+broker: tcp://broker.example.net:1883
+
+topics:
+  # Pressing a key sends its payload here, not retained.
+  command: screen/mode/set
+  # The screen says here, retained, which mode it is showing. The key whose
+  # payload equals the message lights up.
+  state: screen/mode/state
+
+# Percent, 1 to 100. Default 70.
+brightness: 70
+
+# Dim the panel after this long without a key press; any key wakes it, and does
+# its job as well. 0 keeps it bright.
+idle_timeout: 10m
+
+# Keys are numbered from 0: left to right, then the next row down. A Stream
+# Deck MK.2 has 0-4, 5-9 and 10-14. Each button needs a payload and a label or
+# an icon. Icons are PNG or JPEG, best white on transparent, and their paths are
+# relative to this file.
+buttons:
+  - key: 0
+    label: Home
+    icon: icons/home.png
+    payload: home
+  - key: 1
+    label: Power
+    icon: icons/power.png
+    payload: power
+  - key: 2
+    label: Calendar
+    icon: icons/calendar.png
+    payload: calendar
+  - key: 3
+    label: Weather
+    icon: icons/weather.png
+    payload: weather
+  - key: 4
+    label: Week
+    icon: icons/week.png
+    payload: week

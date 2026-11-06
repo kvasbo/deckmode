@@ -1,0 +1,2 @@
+# Elgato Stream Decks: readable and writable by the deckmode service.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", MODE="0660", GROUP="deckmode"

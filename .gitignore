@@ -1,0 +1,11 @@
+# The real config and credentials never belong in this public repo.
+/config.yaml
+/config.local.yaml
+/*.local.yaml
+.env
+/env
+/icons.local/
+
+/deckmode
+/dist/
+.DS_Store

@@ -1,0 +1,86 @@
+#!/bin/bash
+# Installs the latest GitHub release of deckmode, if it isn't installed already.
+#
+#   deckmode-update             what the hourly timer runs
+#   deckmode-update --rollback  back to the previous binary, and stay away from
+#                               the version being left until a newer one is out
+set -euo pipefail
+
+REPO=kvasbo/deckmode
+ASSET=deckmode-linux-arm64
+BIN=/usr/local/bin/deckmode
+PREVIOUS=$BIN.previous
+SKIP=/var/lib/deckmode/skip-version
+
+restart() {
+	if systemctl is-enabled --quiet deckmode.service; then
+		systemctl restart deckmode.service
+	fi
+}
+
+installed_version() {
+	if [ -x "$BIN" ]; then "$BIN" --version; fi
+}
+
+if [ "${1:-}" = "--rollback" ]; then
+	if [ ! -x "$PREVIOUS" ]; then
+		echo "deckmode-update: there is no previous binary to go back to" >&2
+		exit 1
+	fi
+	mkdir -p "$(dirname "$SKIP")"
+	installed_version >"$SKIP"
+	mv -f "$PREVIOUS" "$BIN"
+	restart
+	echo "deckmode-update: back on $("$BIN" --version); skipping $(cat "$SKIP")"
+	exit 0
+fi
+
+# GitHub redirects /releases/latest to the tag's page. No API, so no rate limit.
+url=$(curl -fsSL --retry 3 --max-time 60 -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")
+latest=${url##*/}
+case $latest in
+v[0-9]*) ;;
+*)
+	echo "deckmode-update: no release found at $url" >&2
+	exit 1
+	;;
+esac
+
+if [ "$latest" = "$(installed_version)" ]; then
+	exit 0
+fi
+if [ -f "$SKIP" ] && [ "$latest" = "$(cat "$SKIP")" ]; then
+	echo "deckmode-update: $latest was rolled back from; waiting for a newer release"
+	exit 0
+fi
+
+# In the binary's own directory, so the final rename is atomic.
+work=$(mktemp -d "$(dirname "$BIN")/.deckmode-update.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+
+base="https://github.com/$REPO/releases/download/$latest"
+curl -fsSL --retry 3 --max-time 300 -o "$work/$ASSET" "$base/$ASSET"
+curl -fsSL --retry 3 --max-time 60 -o "$work/checksums.txt" "$base/checksums.txt"
+
+# Only the binary's line: the release has other assets, not downloaded here.
+if ! grep -E "[[:space:]]\*?$ASSET\$" "$work/checksums.txt" >"$work/checksum"; then
+	echo "deckmode-update: $ASSET is not in the checksums of $latest" >&2
+	exit 1
+fi
+(cd "$work" && sha256sum --check --quiet checksum)
+
+chmod 755 "$work/$ASSET"
+reported=$("$work/$ASSET" --version)
+if [ "$reported" != "$latest" ]; then
+	echo "deckmode-update: the binary of $latest says it is '$reported'" >&2
+	exit 1
+fi
+
+if [ -x "$BIN" ]; then
+	cp -p "$BIN" "$work/previous"
+	mv -f "$work/previous" "$PREVIOUS"
+fi
+mv -f "$work/$ASSET" "$BIN"
+rm -f "$SKIP"
+restart
+echo "deckmode-update: installed $latest"
