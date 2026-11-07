@@ -60,8 +60,9 @@ as a LaunchAgent of that user: it starts at login, restarts if it fails, and a s
 for a new release every hour. No sudo, and nothing outside your home directory. Quit the Elgato
 Stream Deck app for good (and remove it from Login Items), or it will hold the deck.
 
-1. **Download and install.** This puts everything in `~/Library/Application Support/deckmode/`,
-   downloads the latest binary, and starts both agents.
+1. **Download and install.** This puts everything in `~/deckmode`: the config, the credentials,
+   the icons, the logs and the binary, where Finder and File Sharing show them. It downloads the
+   latest binary and starts both agents.
 
    ```bash
    cd /tmp && curl -fsSL https://github.com/kvasbo/deckmode/releases/latest/download/deckmode-deploy.tar.gz | tar xz
@@ -71,14 +72,16 @@ Stream Deck app for good (and remove it from Login Items), or it will hold the d
    /tmp/deckmode-deploy/install.sh
    ```
 
-2. **Configure.** Set the broker, topics and buttons, then the broker's user and password.
+2. **Configure.** Set the broker, topics and buttons in `config.yaml`, then the broker's user and
+   password in `env`. Put your own icons in `icons/`. Any text editor will do, also over File
+   Sharing from another Mac.
 
    ```bash
-   open -e ~/Library/Application\ Support/deckmode/config.yaml
+   open -e ~/deckmode/config.yaml
    ```
 
    ```bash
-   open -e ~/Library/Application\ Support/deckmode/env
+   open -e ~/deckmode/env
    ```
 
 3. **Restart it and watch.** Look for `Stream Deck connected` and `MQTT connected`.
@@ -88,7 +91,7 @@ Stream Deck app for good (and remove it from Login Items), or it will hold the d
    ```
 
    ```bash
-   tail -f ~/Library/Logs/deckmode.log
+   tail -f ~/deckmode/deckmode.log
    ```
 
 ## Updates and rollback
@@ -96,12 +99,12 @@ Stream Deck app for good (and remove it from Login Items), or it will hold the d
 The update agent runs hourly and looks for a newer GitHub release. If there is one, it downloads
 the binary, verifies the checksum, checks the binary runs and reports the right version, renames
 it into place, and restarts deckmode. The binary it replaced stays as `deckmode.previous`. Its log
-is `~/Library/Logs/deckmode-update.log`.
+is `~/deckmode/deckmode-update.log`.
 
 Nothing tells a bad release from a good one automatically. To go back:
 
 ```bash
-~/Library/Application\ Support/deckmode/deckmode-update --rollback
+~/deckmode/deckmode-update --rollback
 ```
 
 That also remembers the version you left, so the agent doesn't reinstall it. The next newer
@@ -117,7 +120,7 @@ for a in io.github.kvasbo.deckmode io.github.kvasbo.deckmode-update; do launchct
 ```
 
 ```bash
-rm -r ~/Library/Application\ Support/deckmode ~/Library/Logs/deckmode*.log
+rm -r ~/deckmode
 ```
 
 ## Manual test checklist

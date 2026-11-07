@@ -1,15 +1,16 @@
 #!/bin/bash
-# Installs deckmode on a Mac, for the logged-in user: no sudo. deckmode runs as
-# a LaunchAgent, so it starts at login and again if it fails, and a second one
+# Installs deckmode on a Mac, for the logged-in user: no sudo. Everything goes
+# in ~/deckmode, where Finder and File Sharing show it: the config, the
+# credentials, the icons, the logs and the binary. deckmode runs as a
+# LaunchAgent, so it starts at login and again if it fails, and a second one
 # looks for a new release every hour. Safe to run again: it never touches an
 # existing config or env file, and it brings the agents and the updater up to
 # date. Run it from the unpacked deckmode-deploy.tar.gz: ./install.sh
 set -euo pipefail
 
 LABEL=io.github.kvasbo.deckmode
-DIR="$HOME/Library/Application Support/deckmode"
-LOGS="$HOME/Library/Logs"
-AGENTS="$HOME/Library/LaunchAgents"
+DIR=$HOME/deckmode
+AGENTS=$HOME/Library/LaunchAgents
 DOMAIN=gui/$(id -u)
 
 if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
@@ -22,7 +23,7 @@ if [ "$(id -u)" = 0 ]; then
 fi
 cd "$(dirname "$0")"
 
-mkdir -p "$DIR/icons" "$LOGS" "$AGENTS"
+mkdir -p "$DIR/icons" "$AGENTS"
 if [ ! -e "$DIR/config.yaml" ]; then
 	install -m 644 config.example.yaml "$DIR/config.yaml"
 fi
@@ -65,9 +66,9 @@ cat >"$AGENTS/$LABEL.plist" <<EOF
 	<key>ThrottleInterval</key>
 	<integer>5</integer>
 	<key>StandardOutPath</key>
-	<string>$LOGS/deckmode.log</string>
+	<string>$DIR/deckmode.log</string>
 	<key>StandardErrorPath</key>
-	<string>$LOGS/deckmode.log</string>
+	<string>$DIR/deckmode.log</string>
 </dict>
 </plist>
 EOF
@@ -86,9 +87,9 @@ cat >"$AGENTS/$LABEL-update.plist" <<EOF
 	<key>StartInterval</key>
 	<integer>3600</integer>
 	<key>StandardOutPath</key>
-	<string>$LOGS/deckmode-update.log</string>
+	<string>$DIR/deckmode-update.log</string>
 	<key>StandardErrorPath</key>
-	<string>$LOGS/deckmode-update.log</string>
+	<string>$DIR/deckmode-update.log</string>
 </dict>
 </plist>
 EOF
@@ -107,8 +108,8 @@ cat <<EOF
 
 Installed $("$DIR/deckmode" --version). Now:
 
-  open -e "$DIR/config.yaml"        the broker, the topics, the buttons
-  open -e "$DIR/env"                the broker's user and password
+  open -e ~/deckmode/config.yaml    the broker, the topics, the buttons
+  open -e ~/deckmode/env            the broker's user and password
   launchctl kickstart -k $DOMAIN/$LABEL
-  tail -f ~/Library/Logs/deckmode.log     to watch it
+  tail -f ~/deckmode/deckmode.log   to watch it
 EOF

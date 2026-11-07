@@ -20,7 +20,7 @@ var version = "dev"
 
 func main() {
 	home, _ := os.UserHomeDir()
-	configPath := flag.String("config", filepath.Join(home, "Library/Application Support/deckmode/config.yaml"), "the config file")
+	configPath := flag.String("config", filepath.Join(home, "deckmode", "config.yaml"), "the config file")
 	dryRun := flag.Bool("dry-run", false, "no deck and no broker: print the board and read presses from the terminal")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
