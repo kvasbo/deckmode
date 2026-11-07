@@ -40,6 +40,8 @@ install -m 755 deckmode-update "$DIR/"
 "$DIR/deckmode-update"
 
 # launchd reads no env file, so a shell loads it first. set -a exports it.
+# --watch: an edit to any of these restarts deckmode within seconds, once the
+# config still loads.
 cat >"$AGENTS/$LABEL.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -51,7 +53,7 @@ cat >"$AGENTS/$LABEL.plist" <<EOF
 	<array>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>set -a; . ./env; exec ./deckmode --config config.yaml</string>
+		<string>set -a; . ./env; exec ./deckmode --config config.yaml --watch config.yaml,env,icons</string>
 	</array>
 	<key>WorkingDirectory</key>
 	<string>$DIR</string>
@@ -110,6 +112,7 @@ Installed $("$DIR/deckmode" --version). Now:
 
   open -e ~/deckmode/config.yaml    the broker, the topics, the buttons
   open -e ~/deckmode/env            the broker's user and password
-  launchctl kickstart -k $DOMAIN/$LABEL
   tail -f ~/deckmode/deckmode.log   to watch it
+
+deckmode restarts by itself a few seconds after you save either file.
 EOF

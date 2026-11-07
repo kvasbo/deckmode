@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -23,6 +24,7 @@ func main() {
 	configPath := flag.String("config", filepath.Join(home, "deckmode", "config.yaml"), "the config file")
 	dryRun := flag.Bool("dry-run", false, "no deck and no broker: print the board and read presses from the terminal")
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	watch := flag.String("watch", "", "comma-separated files and folders: when one changes, and the config still loads, exit with status 3 so launchd starts deckmode again")
 	flag.Parse()
 
 	if *showVersion {
@@ -60,7 +62,23 @@ func main() {
 		wg.Go(func() { mqtt.Run(ctx) })
 	}
 
+	restart := false
+	if *watch != "" {
+		files := strings.Split(*watch, ",")
+		check := func() error { _, err := LoadConfig(*configPath); return err }
+		wg.Go(func() {
+			if watchForRestart(ctx, 2*time.Second, files, check) {
+				slog.Info("restarting for the changed files")
+				restart = true
+				stop()
+			}
+		})
+	}
+
 	slog.Info("deckmode starting", "version", version, "buttons", len(cfg.Buttons))
 	NewController(cfg, deck, broker, time.Now).Run(ctx, events)
 	wg.Wait()
+	if restart {
+		os.Exit(exitRestart)
+	}
 }

@@ -73,8 +73,9 @@ Stream Deck app for good (and remove it from Login Items), or it will hold the d
    ```
 
 2. **Configure.** Set the broker, topics and buttons in `config.yaml`, then the broker's user and
-   password in `env`. Put your own icons in `icons/`. Any text editor will do, also over File
-   Sharing from another Mac.
+   password in `env`, as `MQTT_USER=me` and `MQTT_PASS='secret'` on two lines (single quotes
+   if the password has spaces, quotes or `$`). Put your own icons in `icons/`. Any text editor
+   will do, also over File Sharing from another Mac.
 
    ```bash
    open -e ~/deckmode/config.yaml
@@ -84,14 +85,19 @@ Stream Deck app for good (and remove it from Login Items), or it will hold the d
    open -e ~/deckmode/env
    ```
 
-3. **Restart it and watch.** Look for `Stream Deck connected` and `MQTT connected`.
-
-   ```bash
-   launchctl kickstart -k gui/$(id -u)/io.github.kvasbo.deckmode
-   ```
+3. **Watch.** A few seconds after you save `config.yaml` or `env`, or change a file in `icons/`,
+   deckmode restarts with them. A config with a mistake is not used: the log says what is wrong,
+   and the running config stays until you fix it. Look for `Stream Deck connected` and
+   `MQTT connected`.
 
    ```bash
    tail -f ~/deckmode/deckmode.log
+   ```
+
+   To restart it by hand:
+
+   ```bash
+   launchctl kickstart -k gui/$(id -u)/io.github.kvasbo.deckmode
    ```
 
 ## Updates and rollback
@@ -148,6 +154,9 @@ a test broker, or know that a press changes the real screen.
 - [ ] **Stop:** `Ctrl-C`, or `launchctl kill TERM gui/$(id -u)/io.github.kvasbo.deckmode`, leaves
       the keys dark.
 - [ ] **Bad config:** a typo in the config gives a clear error at startup.
+- [ ] **Edit while running:** change a label in `~/deckmode/config.yaml`, over File Sharing too.
+      The key shows it within a few seconds. Save a typo: the log says what is wrong, and the
+      keys stay as they were.
 - [ ] **Login:** after a restart and login it runs by itself
       (`launchctl print gui/$(id -u)/io.github.kvasbo.deckmode | grep state`).
 - [ ] **Update:** tag a release. Within about an hour the Mac runs it (or
