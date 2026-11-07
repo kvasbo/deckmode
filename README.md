@@ -3,7 +3,7 @@
 Turns an Elgato Stream Deck into a control panel for a screen that switches modes over MQTT.
 Each key is one mode. Pressing it sends the mode to the screen, and the key of the mode the
 screen is really showing lights up. It talks to the deck directly over USB HID: no Elgato
-software, no Companion. It runs headless on a Raspberry Pi, or in the background on a Mac.
+software, no Companion. It runs in the background on a Mac with Apple silicon.
 
 - The active mode's key lights up with a white edge, in blue or the `highlight` colour you
   choose, also right after a restart, without any press.
@@ -50,94 +50,15 @@ MQTT_USER=me MQTT_PASS=secret go run . --config config.local.yaml
 
 One YAML file; [config.example.yaml](config.example.yaml) explains every option. It is checked at
 startup, and the error lists everything wrong with it. Credentials come from the environment
-(`MQTT_USER`, `MQTT_PASS`), never from this file. Your real config stays on the Pi or the Mac
-that runs deckmode, or in a git-ignored `*.local.yaml`.
+(`MQTT_USER`, `MQTT_PASS`), never from this file. Your real config stays on the Mac that runs
+deckmode, or in a git-ignored `*.local.yaml`.
 
-## From a freshly flashed SD card
-
-1. **Flash.** In Raspberry Pi Imager choose *Raspberry Pi OS Lite (64-bit)*. In its settings, set
-   a hostname, a user, Wi-Fi if you need it, and turn on SSH.
-2. **Boot and log in.** Put in the card, plug the Stream Deck into the Pi, power it on and wait a
-   minute or two.
-
-   ```bash
-   ssh <user>@<hostname>.local
-   ```
-
-3. **Update the system and get the tools.**
-
-   ```bash
-   sudo apt update && sudo apt full-upgrade -y && sudo apt install -y curl
-   ```
-
-4. **Download the installer.**
-
-   ```bash
-   curl -fsSLO https://github.com/kvasbo/deckmode/releases/latest/download/deckmode-deploy.tar.gz
-   ```
-
-   ```bash
-   tar xzf deckmode-deploy.tar.gz
-   ```
-
-5. **Install.** This creates the `deckmode` user, the udev rule, `/etc/deckmode/`, the service and
-   the update timer, and downloads the latest binary.
-
-   ```bash
-   sudo deckmode-deploy/install.sh
-   ```
-
-6. **Configure.** Set the broker, topics and buttons, and then the broker's user and password.
-   Put your own icons in `/etc/deckmode/icons/`.
-
-   ```bash
-   sudo nano /etc/deckmode/config.yaml
-   ```
-
-   ```bash
-   sudo nano /etc/deckmode/env
-   ```
-
-7. **Start it and watch.** Look for `Stream Deck connected` and `MQTT connected`.
-
-   ```bash
-   sudo systemctl restart deckmode
-   ```
-
-   ```bash
-   journalctl -u deckmode -f
-   ```
-
-## Updates and rollback
-
-`deckmode-update.timer` runs hourly and looks for a newer GitHub release. If there is one, it
-downloads the binary, verifies the checksum, checks the binary runs and reports the right version,
-renames it into place, and restarts the service. The binary it replaced stays as
-`/usr/local/bin/deckmode.previous`.
-
-Nothing tells a bad release from a good one automatically. To go back:
-
-```bash
-sudo deckmode-update --rollback
-```
-
-That also remembers the version you left, so the timer doesn't reinstall it. The next newer
-release is installed as usual. To see what the timer has done:
-
-```bash
-journalctl -u deckmode-update
-```
-
-The updater replaces only the binary. If a release changes the units or the updater itself, run
-`install.sh` from that release again; it leaves your config and credentials alone.
-
-## On a Mac, for good
+## Install
 
 For a Mac with Apple silicon that stays logged in, like one driving a wall display. deckmode runs
 as a LaunchAgent of that user: it starts at login, restarts if it fails, and a second agent looks
-for a new release every hour, just like on the Pi. No sudo, and nothing outside your home
-directory. Quit the Elgato Stream Deck app for good (and remove it from Login Items), or it will
-hold the deck.
+for a new release every hour. No sudo, and nothing outside your home directory. Quit the Elgato
+Stream Deck app for good (and remove it from Login Items), or it will hold the deck.
 
 1. **Download and install.** This puts everything in `~/Library/Application Support/deckmode/`,
    downloads the latest binary, and starts both agents.
@@ -147,7 +68,7 @@ hold the deck.
    ```
 
    ```bash
-   /tmp/deckmode-deploy/install-macos.sh
+   /tmp/deckmode-deploy/install.sh
    ```
 
 2. **Configure.** Set the broker, topics and buttons, then the broker's user and password.
@@ -170,13 +91,26 @@ hold the deck.
    tail -f ~/Library/Logs/deckmode.log
    ```
 
-Updates work as on the Pi, with `~/Library/Logs/deckmode-update.log` as their log. To roll back:
+## Updates and rollback
+
+The update agent runs hourly and looks for a newer GitHub release. If there is one, it downloads
+the binary, verifies the checksum, checks the binary runs and reports the right version, renames
+it into place, and restarts deckmode. The binary it replaced stays as `deckmode.previous`. Its log
+is `~/Library/Logs/deckmode-update.log`.
+
+Nothing tells a bad release from a good one automatically. To go back:
 
 ```bash
 ~/Library/Application\ Support/deckmode/deckmode-update --rollback
 ```
 
-To remove it all:
+That also remembers the version you left, so the agent doesn't reinstall it. The next newer
+release is installed as usual.
+
+The updater replaces only the binary. If a release changes the agents or the updater itself, run
+`install.sh` from that release again; it leaves your config and credentials alone.
+
+## Remove it
 
 ```bash
 for a in io.github.kvasbo.deckmode io.github.kvasbo.deckmode-update; do launchctl bootout gui/$(id -u)/$a; rm ~/Library/LaunchAgents/$a.plist; done
@@ -197,7 +131,7 @@ a test broker, or know that a press changes the real screen.
       published its state.
 - [ ] **Screen changes by itself:** change the mode from elsewhere, or let it time out. The light follows.
 - [ ] **Unknown state:** publish a state no button has. No key is lit, and the log says why.
-- [ ] **Busy (Mac):** with the Elgato app running, start deckmode. The log tells you to quit the
+- [ ] **Busy:** with the Elgato app running, start deckmode. The log tells you to quit the
       app. Quit it. The keys appear without a restart.
 - [ ] **Broker down:** stop the broker. All keys show OFFLINE, within about 20 seconds at worst. A press
       sends nothing.
@@ -208,16 +142,15 @@ a test broker, or know that a press changes the real screen.
 - [ ] **Replug:** plug it back in. Keys and light return within a few seconds, at full brightness.
 - [ ] **State changes while unplugged:** the replugged deck shows the new state.
 - [ ] **Idle:** with a short `idle_timeout`, the panel dims. Any key wakes it, also one with no button.
-- [ ] **Stop:** `Ctrl-C` or `systemctl stop` leaves the keys dark.
+- [ ] **Stop:** `Ctrl-C`, or `launchctl kill TERM gui/$(id -u)/io.github.kvasbo.deckmode`, leaves
+      the keys dark.
 - [ ] **Bad config:** a typo in the config gives a clear error at startup.
-- [ ] **Pi, service:** after a reboot it comes back by itself, running as `deckmode`, not root
-      (`ps -o user= -C deckmode`).
-- [ ] **Pi, update:** tag a release. Within about an hour the Pi runs it (or
-      `sudo systemctl start deckmode-update`, then `deckmode --version`), and `deckmode.previous` exists.
-- [ ] **Pi, rollback:** `sudo deckmode-update --rollback`. The old version runs, and the timer leaves it alone.
-- [ ] **Mac, login:** after a restart and login it runs by itself
+- [ ] **Login:** after a restart and login it runs by itself
       (`launchctl print gui/$(id -u)/io.github.kvasbo.deckmode | grep state`).
-- [ ] **Mac, update and rollback:** as on the Pi, with the commands in *On a Mac, for good*.
+- [ ] **Update:** tag a release. Within about an hour the Mac runs it (or
+      `launchctl kickstart gui/$(id -u)/io.github.kvasbo.deckmode-update`), the log says so, and
+      `deckmode.previous` exists.
+- [ ] **Rollback:** `deckmode-update --rollback`. The old version runs, and the agent leaves it alone.
 
 ## How it's built
 
@@ -235,9 +168,7 @@ These were compared:
 | dh1tw/streamdeck | no (bearsh/hid) | no, the read loop keeps spinning | no | 2025 |
 | magicmonkey/go-streamdeck | no (karalabe/hid from 2019) | not checked | not checked | 2024 |
 
-It is the only one that covers replugging and the busy message without patching. Having no cgo
-also settles glibc compatibility: the release is a static binary, which runs on any Pi OS release.
-The cost: it's a small one-person project, and its GitHub repo is archived because development moved to
+It is the only one that covers replugging and the busy message without patching. The cost: it's a small one-person project, and its GitHub repo is archived because development moved to
 the author's own Forgejo. Go's module proxy keeps the pinned version available, and everything
 that touches it is in `deck_hid.go`, so it can be swapped.
 
@@ -249,11 +180,10 @@ Icons in `icons/` are simple examples made for this repo.
 go test -race ./...
 ```
 
-Every push runs vet, tests and shellcheck. A tag `v*` builds the arm64 binaries on GitHub's native
-arm64 runner, the Pi's and the Mac's, checks the Pi's runs on Debian bookworm and trixie, and
-publishes them with `deckmode-deploy.tar.gz` (both installers) and `checksums.txt`. No workflow
-needs access to your network.
+Every push runs vet, tests and shellcheck. A tag `v*` builds the binary on GitHub's Apple silicon
+runner, checks it runs and reports the tag, and publishes it with `deckmode-deploy.tar.gz` (the
+installer) and `checksums.txt`. No workflow needs access to your network.
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.3.0 && git push origin v0.3.0
 ```

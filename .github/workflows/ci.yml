@@ -19,11 +19,9 @@ jobs:
         run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test -race ./...
-      - name: Builds for the Pi and the Mac
+      - name: Builds for the Mac
         env:
           CGO_ENABLED: "0"
-        run: |
-          GOOS=linux GOARCH=arm64 go build -o /dev/null .
-          GOOS=darwin GOARCH=arm64 go build -o /dev/null .
+        run: GOOS=darwin GOARCH=arm64 go build -o /dev/null .
       - name: Shell scripts
-        run: shellcheck deploy/install.sh deploy/install-macos.sh deploy/deckmode-update
+        run: shellcheck deploy/install.sh deploy/deckmode-update

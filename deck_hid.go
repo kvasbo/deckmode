@@ -7,7 +7,6 @@ import (
 	"image"
 	"image/color"
 	"log/slog"
-	"runtime"
 	"sync"
 	"time"
 
@@ -144,13 +143,7 @@ func explain(err error) string {
 	case errors.Is(err, streamdeck.ErrMoreThanOneDeviceFound):
 		return "more than one Stream Deck found; leave one plugged in"
 	case errors.Is(err, streamdeck.ErrDeviceLocked):
-		if runtime.GOOS == "darwin" {
-			return "the Stream Deck is busy: quit the Elgato Stream Deck app (menu bar icon, then Quit). Waiting for it to be free"
-		}
-		return "the Stream Deck is busy: another program has it open. Waiting for it to be free"
-	}
-	if runtime.GOOS == "linux" {
-		return fmt.Sprintf("can't open the Stream Deck: %v. Is the udev rule installed, and is this user in its group?", err)
+		return "the Stream Deck is busy: quit the Elgato Stream Deck app (menu bar icon, then Quit). Waiting for it to be free"
 	}
 	return fmt.Sprintf("can't open the Stream Deck: %v", err)
 }

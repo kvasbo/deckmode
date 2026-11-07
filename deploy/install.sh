@@ -1,60 +1,114 @@
 #!/bin/bash
-# Installs deckmode on a Raspberry Pi. Safe to run again: it never touches an
-# existing config or env file, and it brings the units and the updater up to
-# date. Run it from the unpacked deckmode-deploy.tar.gz: sudo ./install.sh
+# Installs deckmode on a Mac, for the logged-in user: no sudo. deckmode runs as
+# a LaunchAgent, so it starts at login and again if it fails, and a second one
+# looks for a new release every hour. Safe to run again: it never touches an
+# existing config or env file, and it brings the agents and the updater up to
+# date. Run it from the unpacked deckmode-deploy.tar.gz: ./install.sh
 set -euo pipefail
 
-NAME=deckmode
-ETC=/etc/$NAME
+LABEL=io.github.kvasbo.deckmode
+DIR="$HOME/Library/Application Support/deckmode"
+LOGS="$HOME/Library/Logs"
+AGENTS="$HOME/Library/LaunchAgents"
+DOMAIN=gui/$(id -u)
 
-if [ "$(id -u)" != 0 ]; then
-	echo "install.sh: run me with sudo" >&2
+if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
+	echo "install.sh: this needs a Mac with Apple silicon; this is $(uname -sm)" >&2
 	exit 1
 fi
-if [ "$(uname -m)" != aarch64 ]; then
-	echo "install.sh: this needs 64-bit Raspberry Pi OS; this is $(uname -m)" >&2
+if [ "$(id -u)" = 0 ]; then
+	echo "install.sh: run me as yourself, not with sudo" >&2
 	exit 1
 fi
 cd "$(dirname "$0")"
 
-# The user first: the udev rule and the file modes below name its group.
-if ! id "$NAME" >/dev/null 2>&1; then
-	useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin "$NAME"
+mkdir -p "$DIR/icons" "$LOGS" "$AGENTS"
+if [ ! -e "$DIR/config.yaml" ]; then
+	install -m 644 config.example.yaml "$DIR/config.yaml"
 fi
-
-install -d -m 755 "$ETC" "$ETC/icons"
-if [ ! -e "$ETC/config.yaml" ]; then
-	install -m 640 -o root -g "$NAME" config.example.yaml "$ETC/config.yaml"
-fi
-if [ ! -e "$ETC/env" ]; then
-	install -m 640 -o root -g "$NAME" env.example "$ETC/env"
+if [ ! -e "$DIR/env" ]; then
+	install -m 600 env.example "$DIR/env"
 fi
 for icon in icons/*; do
-	if [ ! -e "$ETC/$icon" ]; then
-		install -m 644 "$icon" "$ETC/$icon"
+	if [ ! -e "$DIR/$icon" ]; then
+		install -m 644 "$icon" "$DIR/$icon"
 	fi
 done
 
-install -m 644 50-deckmode-streamdeck.rules /etc/udev/rules.d/
-udevadm control --reload-rules
-udevadm trigger --subsystem-match=hidraw
+install -m 755 deckmode-update "$DIR/"
+"$DIR/deckmode-update"
 
-install -m 755 deckmode-update /usr/local/sbin/
-install -m 644 deckmode.service deckmode-update.service deckmode-update.timer /etc/systemd/system/
-systemctl daemon-reload
+# launchd reads no env file, so a shell loads it first. set -a exports it.
+cat >"$AGENTS/$LABEL.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>$LABEL</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>set -a; . ./env; exec ./deckmode --config config.yaml</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>$DIR</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<!-- Never give up: the broker or the deck may come back whenever. -->
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+	<key>StandardOutPath</key>
+	<string>$LOGS/deckmode.log</string>
+	<key>StandardErrorPath</key>
+	<string>$LOGS/deckmode.log</string>
+</dict>
+</plist>
+EOF
 
-/usr/local/sbin/deckmode-update
+cat >"$AGENTS/$LABEL-update.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>$LABEL-update</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>$DIR/deckmode-update</string>
+	</array>
+	<key>StartInterval</key>
+	<integer>3600</integer>
+	<key>StandardOutPath</key>
+	<string>$LOGS/deckmode-update.log</string>
+	<key>StandardErrorPath</key>
+	<string>$LOGS/deckmode-update.log</string>
+</dict>
+</plist>
+EOF
 
-systemctl enable --now deckmode-update.timer
-systemctl enable deckmode.service
-systemctl restart deckmode.service
+# Unload the old agents first, and wait: launchd finishes that in the background.
+for label in "$LABEL" "$LABEL-update"; do
+	launchctl bootout "$DOMAIN/$label" 2>/dev/null || true
+	for _ in 1 2 3 4 5 6 7 8 9 10; do
+		launchctl print "$DOMAIN/$label" >/dev/null 2>&1 || break
+		sleep 1
+	done
+	launchctl bootstrap "$DOMAIN" "$AGENTS/$label.plist"
+done
 
 cat <<EOF
 
-Installed $(/usr/local/bin/deckmode --version). Now:
+Installed $("$DIR/deckmode" --version). Now:
 
-  sudo nano $ETC/config.yaml      the broker, the topics, the buttons
-  sudo nano $ETC/env              the broker's user and password
-  sudo systemctl restart $NAME
-  journalctl -u $NAME -f          to watch it
+  open -e "$DIR/config.yaml"        the broker, the topics, the buttons
+  open -e "$DIR/env"                the broker's user and password
+  launchctl kickstart -k $DOMAIN/$LABEL
+  tail -f ~/Library/Logs/deckmode.log     to watch it
 EOF

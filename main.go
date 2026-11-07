@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -18,7 +19,8 @@ import (
 var version = "dev"
 
 func main() {
-	configPath := flag.String("config", "/etc/deckmode/config.yaml", "the config file")
+	home, _ := os.UserHomeDir()
+	configPath := flag.String("config", filepath.Join(home, "Library/Application Support/deckmode/config.yaml"), "the config file")
 	dryRun := flag.Bool("dry-run", false, "no deck and no broker: print the board and read presses from the terminal")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
