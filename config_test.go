@@ -2,6 +2,7 @@ package main
 
 import (
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -64,6 +65,42 @@ func TestBrightnessDefaults(t *testing.T) {
 	}
 	if cfg.Brightness != 70 {
 		t.Errorf("brightness = %d, want the default 70", cfg.Brightness)
+	}
+}
+
+func TestHighlight(t *testing.T) {
+	cfg, err := LoadConfig(writeConfig(t, goodConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (color.RGBA{0x15, 0x65, 0xc0, 0xff}); cfg.Highlight != want {
+		t.Errorf("default highlight = %v, want %v", cfg.Highlight, want)
+	}
+
+	// With or without the #, any case. A bare 123456 is a number to YAML.
+	cases := map[string]color.RGBA{
+		`"#ff8800"`: {0xff, 0x88, 0x00, 0xff},
+		`"#FF8800"`: {0xff, 0x88, 0x00, 0xff},
+		`'ff8800'`:  {0xff, 0x88, 0x00, 0xff},
+		`2e7d32`:    {0x2e, 0x7d, 0x32, 0xff},
+		`123456`:    {0x12, 0x34, 0x56, 0xff},
+	}
+	for in, want := range cases {
+		cfg, err := LoadConfig(writeConfig(t, goodConfig+"highlight: "+in+"\n"))
+		if err != nil {
+			t.Errorf("%s: %v", in, err)
+			continue
+		}
+		if cfg.Highlight != want {
+			t.Errorf("%s: got %v, want %v", in, cfg.Highlight, want)
+		}
+	}
+
+	for _, in := range []string{`blue`, `"#12345"`, `"#1234567"`, `"#12345g"`, `"+12345"`} {
+		_, err := LoadConfig(writeConfig(t, goodConfig+"highlight: "+in+"\n"))
+		if err == nil || !strings.Contains(err.Error(), "highlight:") {
+			t.Errorf("%s: want a highlight error, got %v", in, err)
+		}
 	}
 }
 

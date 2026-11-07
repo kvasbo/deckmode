@@ -51,7 +51,7 @@ func main() {
 			stop()
 		}()
 	} else {
-		hid := &hidDeck{}
+		hid := &hidDeck{highlight: cfg.Highlight}
 		mqtt := newMQTTBroker(ctx, cfg, os.Getenv("MQTT_USER"), os.Getenv("MQTT_PASS"), events)
 		deck, broker = hid, mqtt
 		wg.Go(func() { hid.Run(ctx, events) })

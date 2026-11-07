@@ -13,6 +13,11 @@ topics:
 # Percent, 1 to 100. Default 70.
 brightness: 70
 
+# The active key's background, as hex. Keep the quotes: in YAML an unquoted #
+# starts a comment, and the default would be used. Default "#1565C0", blue. Text
+# and icons on it are white, so pick a darker colour.
+highlight: "#1565C0"
+
 # Dim the panel after this long without a key press; any key wakes it, and does
 # its job as well. 0 keeps it bright.
 idle_timeout: 10m

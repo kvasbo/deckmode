@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/jpeg" // icons may be JPEG
 	_ "image/png"  // or PNG
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,13 +19,15 @@ import (
 
 // Config is the YAML file; see config.example.yaml.
 type Config struct {
-	Broker     string   `yaml:"broker"`
-	Topics     Topics   `yaml:"topics"`
-	Brightness int      `yaml:"brightness"`   // percent
-	RawIdle    string   `yaml:"idle_timeout"` // a string, so that a bare 0 is allowed
-	Buttons    []Button `yaml:"buttons"`
+	Broker       string   `yaml:"broker"`
+	Topics       Topics   `yaml:"topics"`
+	Brightness   int      `yaml:"brightness"`   // percent
+	RawIdle      string   `yaml:"idle_timeout"` // a string, so that a bare 0 is allowed
+	RawHighlight string   `yaml:"highlight"`    // like #1565C0
+	Buttons      []Button `yaml:"buttons"`
 
 	IdleTimeout time.Duration `yaml:"-"` // 0: never dim
+	Highlight   color.RGBA    `yaml:"-"` // the active key's background
 }
 
 type Topics struct {
@@ -51,7 +55,7 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	defer f.Close()
 
-	cfg := &Config{Brightness: 70}
+	cfg := &Config{Brightness: 70, RawHighlight: "#1565C0"}
 	dec := yaml.NewDecoder(f)
 	dec.KnownFields(true) // a misspelled option is an error, not silently ignored
 	if err := dec.Decode(cfg); err != nil {
@@ -93,6 +97,11 @@ func (c *Config) validate(dir string) error {
 		default:
 			c.IdleTimeout = idle
 		}
+	}
+	if hl, err := parseColor(c.RawHighlight); err != nil {
+		fail("highlight: %q is not a colour like \"#1565C0\"", c.RawHighlight)
+	} else {
+		c.Highlight = hl
 	}
 	if len(c.Buttons) == 0 {
 		fail("buttons: at least one is required")
@@ -157,6 +166,16 @@ func checkBroker(s string) error {
 		return fmt.Errorf("%q needs both a host and a port", s)
 	}
 	return nil
+}
+
+// parseColor reads six hex digits, with or without a # in front.
+func parseColor(s string) (color.RGBA, error) {
+	hex := strings.TrimPrefix(s, "#")
+	n, err := strconv.ParseUint(hex, 16, 32)
+	if err != nil || len(hex) != 6 {
+		return color.RGBA{}, errors.New("not a colour")
+	}
+	return color.RGBA{uint8(n >> 16), uint8(n >> 8), uint8(n), 0xff}, nil
 }
 
 func loadIcon(dir, name string) (image.Image, error) {

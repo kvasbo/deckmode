@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"log/slog"
 	"runtime"
 	"sync"
@@ -20,6 +21,8 @@ const pollInterval = 2 * time.Second
 // program runs, so unplugging, replugging or quitting the app that holds it
 // needs no restart.
 type hidDeck struct {
+	highlight color.RGBA // the active key's background
+
 	mu   sync.Mutex
 	dev  *streamdeck.Device // nil while there's no deck
 	rect image.Rectangle    // a key's size
@@ -117,7 +120,7 @@ func (d *hidDeck) Show(keys map[int]KeyView) error {
 			errs = append(errs, fmt.Errorf("key %d: this deck has %d keys, numbered from 0", key, d.dev.GetKeyCount()))
 			continue
 		}
-		if err := d.dev.SetKeyImage(streamdeck.KEY_1+streamdeck.KeyID(key), renderKey(v, d.rect)); err != nil {
+		if err := d.dev.SetKeyImage(streamdeck.KEY_1+streamdeck.KeyID(key), renderKey(v, d.rect, d.highlight)); err != nil {
 			errs = append(errs, fmt.Errorf("key %d: %w", key, err))
 		}
 	}

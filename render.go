@@ -13,7 +13,6 @@ import (
 
 var (
 	colorIdle    = color.RGBA{0x00, 0x00, 0x00, 0xff}
-	colorActive  = color.RGBA{0x15, 0x65, 0xc0, 0xff}
 	colorOffline = color.RGBA{0xc6, 0x28, 0x28, 0xff}
 	colorText    = color.RGBA{0xff, 0xff, 0xff, 0xff}
 	colorMuted   = color.RGBA{0xb0, 0xb0, 0xb0, 0xff}
@@ -35,13 +34,13 @@ var labelFont = func() *opentype.Font {
 }()
 
 // renderKey draws a key: the icon above its label, or whichever of them there
-// is, big. The active mode gets a blue key with a white edge. Without a broker
-// every key goes faint with a red OFFLINE band.
-func renderKey(v KeyView, rect image.Rectangle) *image.RGBA {
+// is, big. The active mode's key is the highlight colour with a white edge.
+// Without a broker every key goes faint with a red OFFLINE band.
+func renderKey(v KeyView, rect image.Rectangle, highlight color.RGBA) *image.RGBA {
 	img := image.NewRGBA(rect)
 	bg := colorIdle
 	if v.Active {
-		bg = colorActive
+		bg = highlight
 	}
 	draw.Draw(img, rect, image.NewUniform(bg), image.Point{}, draw.Src)
 
