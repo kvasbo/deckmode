@@ -3,9 +3,10 @@
 Turns an Elgato Stream Deck into a control panel for a screen that switches modes over MQTT.
 Each key is one mode. Pressing it sends the mode to the screen, and the key of the mode the
 screen is really showing lights up. It talks to the deck directly over USB HID: no Elgato
-software, no Companion. It is developed on a Mac and runs headless on a Raspberry Pi.
+software, no Companion. It runs headless on a Raspberry Pi, or in the background on a Mac.
 
-- The active mode's key is blue with a white edge, also right after a restart, without any press.
+- The active mode's key lights up with a white edge, in blue or the `highlight` colour you
+  choose, also right after a restart, without any press.
 - Without a broker every key goes faint with a red OFFLINE band. It reconnects on its own, with
   backoff, and presses meanwhile send nothing.
 - Unplug the deck whenever: it is picked up again when it comes back.
@@ -49,8 +50,8 @@ MQTT_USER=me MQTT_PASS=secret go run . --config config.local.yaml
 
 One YAML file; [config.example.yaml](config.example.yaml) explains every option. It is checked at
 startup, and the error lists everything wrong with it. Credentials come from the environment
-(`MQTT_USER`, `MQTT_PASS`), never from this file. Your real config stays on the Pi, or in a
-git-ignored `*.local.yaml`.
+(`MQTT_USER`, `MQTT_PASS`), never from this file. Your real config stays on the Pi or the Mac
+that runs deckmode, or in a git-ignored `*.local.yaml`.
 
 ## From a freshly flashed SD card
 
@@ -130,6 +131,61 @@ journalctl -u deckmode-update
 The updater replaces only the binary. If a release changes the units or the updater itself, run
 `install.sh` from that release again; it leaves your config and credentials alone.
 
+## On a Mac, for good
+
+For a Mac with Apple silicon that stays logged in, like one driving a wall display. deckmode runs
+as a LaunchAgent of that user: it starts at login, restarts if it fails, and a second agent looks
+for a new release every hour, just like on the Pi. No sudo, and nothing outside your home
+directory. Quit the Elgato Stream Deck app for good (and remove it from Login Items), or it will
+hold the deck.
+
+1. **Download and install.** This puts everything in `~/Library/Application Support/deckmode/`,
+   downloads the latest binary, and starts both agents.
+
+   ```bash
+   cd /tmp && curl -fsSL https://github.com/kvasbo/deckmode/releases/latest/download/deckmode-deploy.tar.gz | tar xz
+   ```
+
+   ```bash
+   /tmp/deckmode-deploy/install-macos.sh
+   ```
+
+2. **Configure.** Set the broker, topics and buttons, then the broker's user and password.
+
+   ```bash
+   open -e ~/Library/Application\ Support/deckmode/config.yaml
+   ```
+
+   ```bash
+   open -e ~/Library/Application\ Support/deckmode/env
+   ```
+
+3. **Restart it and watch.** Look for `Stream Deck connected` and `MQTT connected`.
+
+   ```bash
+   launchctl kickstart -k gui/$(id -u)/io.github.kvasbo.deckmode
+   ```
+
+   ```bash
+   tail -f ~/Library/Logs/deckmode.log
+   ```
+
+Updates work as on the Pi, with `~/Library/Logs/deckmode-update.log` as their log. To roll back:
+
+```bash
+~/Library/Application\ Support/deckmode/deckmode-update --rollback
+```
+
+To remove it all:
+
+```bash
+for a in io.github.kvasbo.deckmode io.github.kvasbo.deckmode-update; do launchctl bootout gui/$(id -u)/$a; rm ~/Library/LaunchAgents/$a.plist; done
+```
+
+```bash
+rm -r ~/Library/Application\ Support/deckmode ~/Library/Logs/deckmode*.log
+```
+
 ## Manual test checklist
 
 Unit tests cover the logic against a fake deck and a fake broker. These need the real things. Use
@@ -159,6 +215,9 @@ a test broker, or know that a press changes the real screen.
 - [ ] **Pi, update:** tag a release. Within about an hour the Pi runs it (or
       `sudo systemctl start deckmode-update`, then `deckmode --version`), and `deckmode.previous` exists.
 - [ ] **Pi, rollback:** `sudo deckmode-update --rollback`. The old version runs, and the timer leaves it alone.
+- [ ] **Mac, login:** after a restart and login it runs by itself
+      (`launchctl print gui/$(id -u)/io.github.kvasbo.deckmode | grep state`).
+- [ ] **Mac, update and rollback:** as on the Pi, with the commands in *On a Mac, for good*.
 
 ## How it's built
 
@@ -190,9 +249,10 @@ Icons in `icons/` are simple examples made for this repo.
 go test -race ./...
 ```
 
-Every push runs vet, tests and shellcheck. A tag `v*` builds the arm64 binary on GitHub's native arm64 runner,
-checks it runs on Debian bookworm and trixie, and publishes it with `deckmode-deploy.tar.gz` and
-`checksums.txt`. No workflow needs access to your network.
+Every push runs vet, tests and shellcheck. A tag `v*` builds the arm64 binaries on GitHub's native
+arm64 runner, the Pi's and the Mac's, checks the Pi's runs on Debian bookworm and trixie, and
+publishes them with `deckmode-deploy.tar.gz` (both installers) and `checksums.txt`. No workflow
+needs access to your network.
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0

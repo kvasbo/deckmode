@@ -18,14 +18,19 @@ jobs:
       - run: go test ./...
 
       # No cgo anywhere in the dependencies, so this is a static binary: no
-      # glibc to match, whatever the Pi OS release.
+      # glibc to match, whatever the Pi OS release. The Mac one cross-compiles
+      # for the same reason (purego), and Go's linker signs it ad hoc, which is
+      # all Apple silicon asks of a binary that curl downloaded.
       - name: Build
         env:
           CGO_ENABLED: "0"
         run: |
           mkdir dist
-          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o dist/deckmode-linux-arm64 .
+          ldflags="-s -w -X main.version=${GITHUB_REF_NAME}"
+          go build -trimpath -ldflags "$ldflags" -o dist/deckmode-linux-arm64 .
           file dist/deckmode-linux-arm64 | grep "statically linked"
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$ldflags" -o dist/deckmode-darwin-arm64 .
+          file dist/deckmode-darwin-arm64 | grep "Mach-O 64-bit arm64 executable"
 
       - name: Runs on Debian bookworm and trixie
         run: |
@@ -34,7 +39,7 @@ jobs:
             test "$got" = "$GITHUB_REF_NAME"
           done
 
-      - name: Pack the Pi installer
+      - name: Pack the installers, for the Pi and the Mac
         run: |
           mkdir deckmode-deploy
           cp deploy/* config.example.yaml deckmode-deploy/
@@ -43,7 +48,7 @@ jobs:
 
       - name: Checksums
         working-directory: dist
-        run: sha256sum deckmode-linux-arm64 deckmode-deploy.tar.gz > checksums.txt
+        run: sha256sum deckmode-linux-arm64 deckmode-darwin-arm64 deckmode-deploy.tar.gz > checksums.txt
 
       - name: Publish
         env:

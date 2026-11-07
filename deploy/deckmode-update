@@ -7,16 +7,36 @@
 set -euo pipefail
 
 REPO=kvasbo/deckmode
-ASSET=deckmode-linux-arm64
-BIN=/usr/local/bin/deckmode
-PREVIOUS=$BIN.previous
-SKIP=/var/lib/deckmode/skip-version
 
-restart() {
-	if systemctl is-enabled --quiet deckmode.service; then
-		systemctl restart deckmode.service
-	fi
-}
+case $(uname -s) in
+Darwin)
+	# install-macos.sh puts everything, this script too, in one directory of
+	# the logged-in user, and runs deckmode as a LaunchAgent.
+	ASSET=deckmode-darwin-arm64
+	DIR=$(cd "$(dirname "$0")" && pwd)
+	BIN=$DIR/deckmode
+	SKIP=$DIR/skip-version
+	AGENT=gui/$(id -u)/io.github.kvasbo.deckmode
+	restart() {
+		if launchctl print "$AGENT" >/dev/null 2>&1; then
+			launchctl kickstart -k "$AGENT"
+		fi
+	}
+	check_sum() { shasum -a 256 --check --quiet "$1"; }
+	;;
+*)
+	ASSET=deckmode-linux-arm64
+	BIN=/usr/local/bin/deckmode
+	SKIP=/var/lib/deckmode/skip-version
+	restart() {
+		if systemctl is-enabled --quiet deckmode.service; then
+			systemctl restart deckmode.service
+		fi
+	}
+	check_sum() { sha256sum --check --quiet "$1"; }
+	;;
+esac
+PREVIOUS=$BIN.previous
 
 installed_version() {
 	if [ -x "$BIN" ]; then "$BIN" --version; fi
@@ -67,7 +87,7 @@ if ! grep -E "[[:space:]]\*?$ASSET\$" "$work/checksums.txt" >"$work/checksum"; t
 	echo "deckmode-update: $ASSET is not in the checksums of $latest" >&2
 	exit 1
 fi
-(cd "$work" && sha256sum --check --quiet checksum)
+(cd "$work" && check_sum checksum)
 
 chmod 755 "$work/$ASSET"
 reported=$("$work/$ASSET" --version)
